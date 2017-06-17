@@ -30,7 +30,9 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.*/
 #include <string>
 using namespace std;
 
+class HOI4Version;
 
+std::ostream& operator << (std::ostream& out, const HOI4Version& version);
 
 class HOI4Version
 {
@@ -38,14 +40,16 @@ public:
 	HOI4Version();
 	HOI4Version(Object* obj);
 	HOI4Version(string version);
-	bool operator >= (HOI4Version& rhs) const;
+	bool operator >= (const HOI4Version& rhs) const;
 
-	friend ostream& operator << (ostream& out, HOI4Version& version);
+	friend ostream& operator << (ostream& out, const HOI4Version& version);
 private:
 	int first;
 	int second;
 	int third;
 };
+
+
 
 
 
