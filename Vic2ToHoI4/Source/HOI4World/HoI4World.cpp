@@ -67,7 +67,6 @@ HoI4World::HoI4World(const V2World* _sourceWorld)
 	convertStrategicRegions();
 	convertDiplomacy();
 	convertTechs();
-	generateLeaders();
 	convertArmies();
 	convertNavies();
 	convertAirforces();
@@ -111,7 +110,6 @@ void HoI4World::convertCountries()
 	//initLeaderTraitsMap(leaderTraits);
 	governmentJobsMap governmentJobs;
 	//initGovernmentJobTypes(governmentJobs);
-	cultureMapping cultureMap = initCultureMap();
 
 	personalityMap landPersonalityMap;
 	personalityMap seaPersonalityMap;
@@ -127,14 +125,14 @@ void HoI4World::convertCountries()
 
 	for (auto sourceItr : sourceWorld->getCountries())
 	{
-		convertCountry(sourceItr, leaderMap, governmentJobs, cultureMap, landPersonalityMap, seaPersonalityMap, landBackgroundMap, seaBackgroundMap);
+		convertCountry(sourceItr, leaderMap, governmentJobs, landPersonalityMap, seaPersonalityMap, landBackgroundMap, seaBackgroundMap);
 	}
 
 	HoI4Localisation::addNonenglishCountryLocalisations();
 }
 
 
-void HoI4World::convertCountry(pair<string, V2Country*> country, map<int, int>& leaderMap, governmentJobsMap governmentJobs, const cultureMapping& cultureMap, personalityMap& landPersonalityMap, personalityMap& seaPersonalityMap, backgroundMap& landBackgroundMap, backgroundMap& seaBackgroundMap)
+void HoI4World::convertCountry(pair<string, V2Country*> country, map<int, int>& leaderMap, governmentJobsMap governmentJobs, personalityMap& landPersonalityMap, personalityMap& seaPersonalityMap, backgroundMap& landBackgroundMap, backgroundMap& seaBackgroundMap)
 {
 	// don't convert rebels
 	if (country.first == "REB")
@@ -146,16 +144,28 @@ void HoI4World::convertCountry(pair<string, V2Country*> country, map<int, int>& 
 	const std::string& HoI4Tag = CountryMapper::getHoI4Tag(country.first);
 	if (!HoI4Tag.empty())
 	{
-		std::string countryFileName = country.second->getName("english") + ".txt";
-		destCountry = new HoI4Country(HoI4Tag, countryFileName, this);
-		V2Party* rulingParty = country.second->getRulingParty(sourceWorld->getParties());
-		if (rulingParty == nullptr)
+		std::string countryFileName = Utils::convert8859_15ToUTF8(country.second->getName("english")) + ".txt";
+		int pipe = countryFileName.find_first_of('|');
+		while (pipe != string::npos)
 		{
-			LOG(LogLevel::Error) << "Could not find the ruling party for " << country.first << ". Most likely a mod was not included.";
-			LOG(LogLevel::Error) << "Double-check your settings, and remember to included EU4 to Vic2 mods. See the FAQ for more information.";
-			exit(-1);
+			countryFileName.replace(pipe, 1, "");
+			pipe = countryFileName.find_first_of('|');
 		}
-		destCountry->initFromV2Country(*sourceWorld, country.second, rulingParty->ideology, leaderMap, governmentJobs, portraitMap, cultureMap, landPersonalityMap, seaPersonalityMap, landBackgroundMap, seaBackgroundMap, states->getProvinceToStateIDMap(), states->getStates());
+		int greater = countryFileName.find_first_of('>');
+		while (greater != string::npos)
+		{
+			countryFileName.replace(greater, 1, "");
+			greater = countryFileName.find_first_of('>');
+		}
+		int lesser = countryFileName.find_first_of('<');
+		while (lesser != string::npos)
+		{
+			countryFileName.replace(lesser, 1, "");
+			lesser = countryFileName.find_first_of('>');
+		}
+		destCountry = new HoI4Country(HoI4Tag, countryFileName, this);
+
+		destCountry->initFromV2Country(*sourceWorld, country.second, states->getProvinceToStateIDMap(), states->getStates());
 		countries.insert(make_pair(HoI4Tag, destCountry));
 	}
 	else
@@ -326,7 +336,12 @@ double HoI4World::getWorldwideWorkerFactoryRatio(map<string, double> workersInCo
 		baseIndustry += countryWorkers.second * 0.000019;
 	}
 
-	double deltaIndustry = baseIndustry - (1189 - landedCountries.size());
+	int defaultFactories = 1189;
+	if (Configuration::getHOI4Version() >= HOI4Version("1.4.0"))
+	{
+		defaultFactories = 1201;
+	}
+	double deltaIndustry = baseIndustry - (defaultFactories - landedCountries.size());
 	double newIndustry = baseIndustry - Configuration::getIcFactor() * deltaIndustry;
 	double acutalWorkerFactoryRatio = newIndustry / totalWorldWorkers;
 
@@ -827,17 +842,6 @@ void HoI4World::addTechs(HoI4Country* country, const string& oldTech, const map<
 }
 
 
-void HoI4World::generateLeaders()
-{
-	LOG(LogLevel::Info) << "Generating Leaders";
-
-	for (auto country: countries)
-	{
-		country.second->generateLeaders(leaderTraits, portraitMap);
-	}
-}
-
-
 void HoI4World::convertArmies()
 {
 	LOG(LogLevel::Info) << "Converting armies";
@@ -1004,7 +1008,7 @@ void HoI4World::createFactions()
 	ofstream factionsLog("factions-logs.csv");
 	factionsLog << "name,government,initial strength,factory strength per year,factory strength by 1939\n";
 
-	for (auto leader: greatPowers)
+	for (auto leader : greatPowers)
 	{
 		if (leader->isInFaction())
 		{
@@ -1025,7 +1029,7 @@ void HoI4World::createFactions()
 			alliesAndPuppets.insert(puppetTag);
 		}
 
-		for (auto allyTag: alliesAndPuppets)
+		for (auto allyTag : alliesAndPuppets)
 		{
 			HoI4Country* allycountry = findCountry(allyTag);
 			if (!allycountry)
@@ -1057,14 +1061,17 @@ void HoI4World::createFactions()
 			}
 		}
 
-		HoI4Faction* newFaction = new HoI4Faction(leader, factionMembers);
-		for (auto member: factionMembers)
+		if (factionMembers.size() > 1)
 		{
-			member->setFaction(newFaction);
-		}
-		factions.push_back(newFaction);
+			HoI4Faction* newFaction = new HoI4Faction(leader, factionMembers);
+			for (auto member : factionMembers)
+			{
+				member->setFaction(newFaction);
+			}
+			factions.push_back(newFaction);
 
-		factionsLog << "Faction Strength in 1939," << factionMilStrength << "\n";
+			factionsLog << "Faction Strength in 1939," << factionMilStrength << "\n";
+		}
 	}
 
 	factionsLog.close();
@@ -1304,7 +1311,7 @@ void HoI4World::outputCountries() const
 
 	for (auto country: countries)
 	{
-		country.second->output(states->getStates(), factions);
+		country.second->output();
 	}
 
 	ofstream ideasFile("output/" + Configuration::getOutputName() + "/interface/converter_ideas.gfx");
