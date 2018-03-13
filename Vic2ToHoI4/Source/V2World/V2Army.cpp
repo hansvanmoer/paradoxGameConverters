@@ -1,4 +1,4 @@
-/*Copyright (c) 2016 The Paradox Game Converters Project
+/*Copyright (c) 2017 The Paradox Game Converters Project
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -27,99 +27,43 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.*/
 
 
 
-V2Regiment::V2Regiment(Object* obj)
+V2Regiment::V2Regiment(shared_ptr<Object> obj):
+	name(obj->safeGetString("name")),
+	type(obj->safeGetString("type")),
+	strength(obj->safeGetFloat("strength")),
+	organization(obj->safeGetFloat("organisation")),
+	experience(obj->safeGetFloat("experience"))
 {
-	string key = obj->getKey();
-
-	std::vector<Object*> objName = obj->getValue("name");
-	(objName.size() > 0) ? name = objName[0]->getLeaf() : name = "";
-
-	std::vector<Object*> objType = obj->getValue("type");
-	if (objType.size() > 0)
-	{
-		type = objType[0]->getLeaf();
-	}
-	else
+	if (type == "")
 	{
 		LOG(LogLevel::Warning) << "Regiment or Ship " << name << " has no type";
-		type = "";
-	}
-
-	std::vector<Object*> objStr = obj->getValue("strength");
-	if (objStr.size() > 0)
-	{
-		strength = stof(objStr[0]->getLeaf());
-	}
-	else
-	{
-		strength = 0.0;
-	}
-
-	objStr = obj->getValue("organisation");
-	if (objStr.size() > 0)
-	{
-		organization = stof(objStr[0]->getLeaf());
-	}
-	else
-	{
-		organization = 0.0;
-	}
-
-	objStr = obj->getValue("experience");
-	if (objStr.size() > 0)
-	{
-		experience = stof(objStr[0]->getLeaf());
-	}
-	else
-	{
-		experience = 0.0;
 	}
 }
 
 
-V2Army::V2Army(Object* obj)
+V2Army::V2Army(shared_ptr<Object> obj):
+	name(obj->safeGetString("name")),
+	location(obj->safeGetInt("location", location)),
+	regiments(),
+	supplies(obj->safeGetFloat("supplies")),
+	at_sea(obj->safeGetInt("at_sea")),
+	navy(obj->getKey() == "navy")
 {
-	string key = obj->getKey();
-	navy = (key == "navy");
-
-	std::vector<Object*> objName = obj->getValue("name");
-	(objName.size() > 0) ? name = objName[0]->getLeaf() : name = "";
-
-	std::vector<Object*> objLoc = obj->getValue("location");
-	if (objLoc.size() > 0)
-	{
-		location = stoi(objLoc[0]->getLeaf());
-	}
-	else
+	if (location == -1)
 	{
 		LOG(LogLevel::Warning) << "Army or Navy " << name << " has no location";
-		location = -1;
 	}
-
-	std::vector<Object*> objAtSea = obj->getValue("at_sea");
-	(objAtSea.size() > 0) ? at_sea = stoi(objAtSea[0]->getLeaf()) : at_sea = 0;
 
 	regiments.clear();
-	std::vector<Object*> objRegs = obj->getValue("regiment");
-	for (auto itr: objRegs)
+	for (auto regimentObj: obj->getValue("regiment"))
 	{
-		V2Regiment* newRegiment = new V2Regiment(itr);
+		V2Regiment* newRegiment = new V2Regiment(regimentObj);
 		regiments.push_back(newRegiment);
 	}
-	std::vector<Object*> objShips = obj->getValue("ship");
-	for (auto itr: objShips)
-	{
-		V2Regiment* newShip = new V2Regiment(itr);
-		regiments.push_back(newShip);
-	}
 
-	std::vector<Object*> objSupp = obj->getValue("supplies");
-	if (objSupp.size() > 0)
+	for (auto shipObj: obj->getValue("ship"))
 	{
-		supplies = stof(objSupp[0]->getLeaf());
-	}
-	else
-	{
-		supplies = 0.0;
+		V2Regiment* newShip = new V2Regiment(shipObj);
+		regiments.push_back(newShip);
 	}
 }

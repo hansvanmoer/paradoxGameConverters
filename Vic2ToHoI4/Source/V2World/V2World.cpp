@@ -1,4 +1,4 @@
-/*Copyright (c) 2017 The Paradox Game Converters Project
+/*Copyright (c) 2018 The Paradox Game Converters Project
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -37,89 +37,88 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.*/
 
 
 
-V2World::V2World(const string& filename)
+V2World::V2World(const string& filename):
+	provinces(),
+	countries(),
+	diplomacy(nullptr),
+	parties(),
+	greatPowers()
 {
 	LOG(LogLevel::Info) << "* Importing V2 save *";
 
 	LOG(LogLevel::Info) << "Parsing save";
-	Object* obj = parser_8859_15::doParseFile(filename);
-	if (obj == NULL)
+	auto obj = parser_8859_15::doParseFile(filename);
+	if (obj)
+	{
+		LOG(LogLevel::Info) << "Building world";
+
+		auto countryIndexToGPRank = extractGreatNationIndices(obj);
+		greatPowers.resize(countryIndexToGPRank.size());
+		unsigned int countryIndex = 1; // Starts from 1 at REB
+
+		for (auto leaf: obj->getLeaves())
+		{
+			string key = leaf->getKey();
+			if (isProvinceKey(key))
+			{
+				provinces[stoi(key)] = new V2Province(leaf);
+			}
+			else if (isCountryKey(key))
+			{
+				countries[key] = new V2Country(leaf);
+				setGreatPowerStatus(key, countryIndexToGPRank, countryIndex);
+				countryIndex++;
+			}
+		}
+
+		setProvinceOwners();
+		addProvinceCoreInfoToCountries();
+		if (Configuration::getRemoveCores())
+		{
+			removeSimpleLandlessNations();
+		}
+		determineEmployedWorkers();
+		removeEmptyNations();
+		determinePartialStates();
+		inputDiplomacy(obj->safeGetObject("diplomacy"));
+		readCountryFiles();
+		setLocalisations();
+		handleMissingCountryCultures();
+
+		CountryMapper::createMappings(this);
+
+		overallMergeNations();
+		checkAllProvincesMapped();
+	}
+	else
 	{
 		LOG(LogLevel::Error) << "Could not parse file " << filename << ". File is likely missing.";
 		exit(-1);
 	}
-
-	LOG(LogLevel::Info) << "Building world";
-
-	provinces.clear();
-	countries.clear();
-	parties.clear();
-	greatPowers.clear();
-
-	map<int, int> countryIndexToGPRank = extractGreatNationIndices(obj);
-	unsigned int countryIndex = 1; // Starts from 1 at REB
-
-	vector<Object*> leaves = obj->getLeaves();
-	for (auto leaf: leaves)
-	{
-		string key = leaf->getKey();
-
-		if (isProvinceKey(key))
-		{
-			provinces[stoi(key)] = new V2Province(leaf);
-		}
-		else if (isCountryKey(key))
-		{
-			countries[key] = new V2Country(leaf);
-			setGreatPowerStatus(key, countryIndexToGPRank, countryIndex);
-			countryIndex++;
-		}
-	}
-
-	setProvinceOwners();
-	addProvinceCoreInfoToCountries();
-	removeSimpleLandlessNations();
-	determineEmployedWorkers();
-	removeEmptyNations();
-	determinePartialStates();
-	inputDiplomacy(obj->getValue("diplomacy"));
-	readCountryFiles();
-	setLocalisations();
-
-	CountryMapper::createMappings(this);
-
-	overallMergeNations();
-	checkAllProvincesMapped();
 }
 
 
-map<int, int> V2World::extractGreatNationIndices(const Object* obj)
+map<int, int> V2World::extractGreatNationIndices(const shared_ptr<Object> obj) const
 {
 	map<int, int> countryIndexToGPRank;
 
-	vector<Object*> greatNationsObj = obj->getValue("great_nations");
-	if (greatNationsObj.size() > 0)
+	auto greatNations = obj->safeGetTokens("great_nations");
+	for (unsigned int i = 0; i < greatNations.size(); i++)
 	{
-		vector<string> greatNations = greatNationsObj[0]->getTokens();
-		for (unsigned int i = 0; i < greatNations.size(); i++)
-		{
-			countryIndexToGPRank.insert(make_pair(stoi(greatNations[i]), i));
-		}
-
-		greatPowers.resize(greatNations.size());
+		countryIndexToGPRank.insert(make_pair(stoi(greatNations[i]), i));
 	}
 
 	return countryIndexToGPRank;
 }
 
 
-bool V2World::isProvinceKey(string key) const
+bool V2World::isProvinceKey(const string& key) const
 {
 	return ((!key.empty()) && (key.find_first_not_of("0123456789") == string::npos));
 }
 
 
-bool V2World::isCountryKey(string key) const
+bool V2World::isCountryKey(const string& key) const
 {
 	return
 	(
@@ -129,25 +128,25 @@ bool V2World::isCountryKey(string key) const
 }
 
 
-bool V2World::isNormalCountryKey(string key) const
+bool V2World::isNormalCountryKey(const string& key) const
 {
 	return (isupper(key[0]) && isupper(key[1]) && isupper(key[2]));
 }
 
 
-bool V2World::isDominionCountryKey(string key) const
+bool V2World::isDominionCountryKey(const string& key) const
 {
 	return ((key[0] == 'D') && isdigit(key[1]) && isdigit(key[2]));
 }
 
 
-bool V2World::isConvertedCountryKey(string key) const
+bool V2World::isConvertedCountryKey(const string& key) const
 {
 	return (isupper(key[0]) && isdigit(key[1]) && isdigit(key[2]));
 }
 
 
-void V2World::setGreatPowerStatus(string tag, const map<int, int>& countryIndexToGPRank, const unsigned int& countryIndex)
+void V2World::setGreatPowerStatus(const string& tag, const map<int, int>& countryIndexToGPRank, unsigned int countryIndex)
 {
 	auto rankingItr = countryIndexToGPRank.find(countryIndex);
 	if (rankingItr != countryIndexToGPRank.end())
@@ -223,7 +222,7 @@ void V2World::removeSimpleLandlessNations()
 }
 
 
-bool V2World::shouldCoreBeRemoved(const V2Province* core, const V2Country* country)
+bool V2World::shouldCoreBeRemoved(const V2Province* core, const V2Country* country) const
 {
 	if (core->getOwner() == nullptr)
 	{
@@ -285,11 +284,11 @@ void V2World::determinePartialStates()
 }
 
 
-void V2World::inputDiplomacy(const vector<Object*> diplomacyObj)
+void V2World::inputDiplomacy(const shared_ptr<Object>& diplomacyObj)
 {
-	if (diplomacyObj.size() > 0)
+	if (diplomacyObj != nullptr)
 	{
-		diplomacy = new V2Diplomacy(diplomacyObj[0]);
+		diplomacy = new V2Diplomacy(diplomacyObj);
 	}
 	else
 	{
@@ -314,13 +313,13 @@ void V2World::readCountryFiles()
 		if (!processCountriesDotTxt(Configuration::getV2Path() + "/common/countries.txt", ""))
 		{
 			LOG(LogLevel::Error) << "Could not open " << Configuration::getV2Path() + "/common/countries.txt";
-			exit(1);
+			exit(-1);
 		}
 	}
 }
 
 
-bool V2World::processCountriesDotTxt(string countryListFile, string mod)
+bool V2World::processCountriesDotTxt(const string& countryListFile, const string& mod)
 {
 	ifstream V2CountriesInput(countryListFile);
 	if (!V2CountriesInput.is_open())
@@ -338,12 +337,13 @@ bool V2World::processCountriesDotTxt(string countryListFile, string mod)
 		}
 
 		string countryFileName = extractCountryFileName(line);
-		Object* countryData = readCountryFile(countryFileName, mod);
-		if (countryData == NULL)
+		shared_ptr<Object> countryData = readCountryFile(countryFileName, mod);
+		if (countryData == nullptr)
 		{
 			continue;
 		}
 		readCountryColor(countryData, line);
+		readShipNames(countryData, line);
 		inputPartyInformation(countryData->getLeaves());
 	}
 
@@ -352,13 +352,13 @@ bool V2World::processCountriesDotTxt(string countryListFile, string mod)
 }
 
 
-bool V2World::shouldLineBeSkipped(string line) const
+bool V2World::shouldLineBeSkipped(const string& line) const
 {
 	return ((line[0] == '#') || (line.size() < 3) || (line.substr(0, 12) == "dynamic_tags"));
 }
 
 
-string V2World::extractCountryFileName(string countryFileLine) const
+string V2World::extractCountryFileName(const string& countryFileLine) const
 {
 	string countryFileName;
 	int start = countryFileLine.find_first_of('/');
@@ -369,28 +369,28 @@ string V2World::extractCountryFileName(string countryFileLine) const
 }
 
 
-Object* V2World::readCountryFile(string countryFileName, string mod) const
+shared_ptr<Object> V2World::readCountryFile(const string& countryFileName, const string& mod) const
 {
-	Object* countryData = NULL;
+	shared_ptr<Object> countryData = nullptr;
 	if (mod != "")
 	{
 		string file = Configuration::getV2Path() + "/mod/" + mod + "/common/countries/" + countryFileName;
 		if (Utils::DoesFileExist(file))
 		{
 			countryData = parser_8859_15::doParseFile(file);
-			if (countryData == NULL)
+			if (!countryData)
 			{
 				LOG(LogLevel::Warning) << "Could not parse file " << file;
 			}
 		}
 	}
-	if (countryData == NULL)
+	if (!countryData)
 	{
 		string file = Configuration::getV2Path() +  "/common/countries/" + countryFileName;
 		if (Utils::DoesFileExist(file))
 		{
 			countryData = parser_8859_15::doParseFile(file);
-			if (countryData == NULL)
+			if (!countryData)
 			{
 				LOG(LogLevel::Warning) << "Could not parse file " << file;
 			}
@@ -405,32 +405,49 @@ Object* V2World::readCountryFile(string countryFileName, string mod) const
 }
 
 
-void V2World::readCountryColor(const Object* countryData, string line)
+void V2World::readCountryColor(shared_ptr<Object> countryData, const string& line)
 {
 	string tag = line.substr(0, 3);
-	vector<Object*> colorObj = countryData->getValue("color");
-	if (colorObj.size() > 0)
+	auto rgb = countryData->safeGetTokens("color");
+	if (rgb.size() == 3)
 	{
-		vector<string> rgb = colorObj[0]->getTokens();
-		if (rgb.size() == 3)
+		if (countries.find(tag) != countries.end())
 		{
-			if (countries.find(tag) != countries.end())
+			countries[tag]->setColor(ConverterColor::Color(stoi(rgb[0]), stoi(rgb[1]), stoi(rgb[2])));
+		}
+	}
+}
+
+
+void V2World::readShipNames(shared_ptr<Object> countryData, const string& line)
+{
+	string tag = line.substr(0, 3);
+	if (countries.find(tag) == countries.end()) return;
+
+	auto leaves = countryData->getLeaves();
+	for (auto leaf : leaves)
+	{
+		string key = leaf->getKey();
+		if (key == "unit_names")
+		{
+			auto unitTypes = leaf->getLeaves();
+			for (auto unitType : unitTypes)
 			{
-				countries[tag]->setColor(Color(stoi(rgb[0]), stoi(rgb[1]), stoi(rgb[2])));
+				countries[tag]->setShipNames(unitType->getKey(), unitType->getTokens());
 			}
 		}
 	}
 }
 
 
-void V2World::inputPartyInformation(const vector<Object*>& leaves)
+void V2World::inputPartyInformation(const vector<shared_ptr<Object>>& leaves)
 {
 	for (auto leaf: leaves)
 	{
 		string key = leaf->getKey();
 		if (key == "party")
 		{
-			parties.push_back(new V2Party(leaf));
+			parties.emplace_back(leaf);
 		}
 	}
 }
@@ -439,71 +456,79 @@ void V2World::inputPartyInformation(const vector<Object*>& leaves)
 void V2World::overallMergeNations()
 {
 	LOG(LogLevel::Info) << "Merging nations";
-	Object* mergeObj = parser_UTF8::doParseFile("merge_nations.txt");
-	if (mergeObj == NULL)
+	auto mergeObj = parser_UTF8::doParseFile("merge_nations.txt");
+	if (mergeObj)
+	{
+		auto rules = mergeObj->safeGetObject("merge_nations");	// all merging rules
+		if (rules == nullptr)
+		{
+			LOG(LogLevel::Debug) << "No nations have merging requested (skipping)";
+			return;
+		}
+
+		for (auto rule: rules->getLeaves())
+		{
+			vector<shared_ptr<Object>> thisMerge = rule->getLeaves();	// the current merge rule
+			string masterTag;										// the nation to merge into
+			vector<string> slaveTags;								// the nations that will be merged into the master
+			bool enabled = false;									// whether or not this rule is enabled
+			for (auto item: thisMerge)
+			{
+				if (item->getKey() == "merge" && item->getLeaf() == "yes")
+				{
+					enabled = true;
+				}
+				else if (item->getKey() == "master")
+				{
+					masterTag = item->getLeaf();
+				}
+				else if (item->getKey() == "slave")
+				{
+					slaveTags.push_back(item->getLeaf());
+				}
+			}
+			if (enabled)
+			{
+				mergeNations(masterTag, slaveTags);
+			}
+		}
+	}
+	else
 	{
 		LOG(LogLevel::Error) << "Could not parse file merge_nations.txt";
 		exit(-1);
 	}
-
-	vector<Object*> rules = mergeObj->getValue("merge_nations");	// all merging rules
-	if (rules.size() < 0)
-	{
-		LOG(LogLevel::Debug) << "No nations have merging requested (skipping)";
-		return;
-	}
-
-	rules = rules[0]->getLeaves();	// the rules themselves
-	for (auto rule: rules)
-	{
-		vector<Object*> thisMerge = rule->getLeaves();	// the current merge rule
-		string masterTag;										// the nation to merge into
-		vector<string> slaveTags;								// the nations that will be merged into the master
-		bool enabled = false;									// whether or not this rule is enabled
-		for (auto item: thisMerge)
-		{
-			if (item->getKey() == "merge" && item->getLeaf() == "yes")
-			{
-				enabled = true;
-			}
-			else if (item->getKey() == "master")
-			{
-				masterTag = item->getLeaf();
-			}
-			else if (item->getKey() == "slave")
-			{
-				slaveTags.push_back(item->getLeaf());
-			}
-		}
-		if (enabled)
-		{
-			mergeNations(masterTag, slaveTags);
-		}
-	}
 }
 
 
-void V2World::mergeNations(string masterTag, const vector<string>& slaveTags)
+void V2World::mergeNations(const string& masterTag, const vector<string>& slaveTags)
 {
-	V2Country* master = getCountry(masterTag);
-	if (master != NULL)
+	auto master = getCountry(masterTag);
+	if (master)
 	{
 		for (auto slaveTag: slaveTags)
 		{
-			V2Country* slave = getCountry(slaveTag);
-			if (slave != NULL)
+			auto slave = getCountry(slaveTag);
+			if (slave)
 			{
-				master->eatCountry(slave);
+				(*master)->eatCountry(*slave);
 			}
 		}
 	}
 }
 
 
-V2Country* V2World::getCountry(string tag) const
+optional<V2Country*> V2World::getCountry(const string& tag) const
 {
 	auto countryItr = countries.find(tag);
-	return (countryItr != countries.end()) ? countryItr->second : NULL;
+	if (countryItr != countries.end())
+	{
+		return countryItr->second;
+	}
+	else
+	{
+		return {};
+	}
 }
 
 
@@ -517,10 +542,26 @@ void V2World::setLocalisations()
 }
 
 
-const V2Province* V2World::getProvince(int provNum) const
+void V2World::handleMissingCountryCultures()
+{
+	for (auto country: countries)
+	{
+		country.second->handleMissingCulture();
+	}
+}
+
+
+optional<const V2Province*> V2World::getProvince(int provNum) const
 {
 	auto provinceItr = provinces.find(provNum);
-	return (provinceItr != provinces.end()) ? provinceItr->second : nullptr;
+	if (provinceItr != provinces.end())
+	{
+		return provinceItr->second;
+	}
+	else
+	{
+		return {};
+	}
 }
 
 

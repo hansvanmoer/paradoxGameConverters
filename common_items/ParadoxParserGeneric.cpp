@@ -16,18 +16,18 @@
 
 using namespace parser_generic;
 
-Object *parser_generic::parseUTF_8(const std::string &file_path){
-	return parser_generic::parse(file_path, UTF_8);
+shared_ptr<Object> parser_generic::parseUTF_8File(const std::string &file_path){
+	return parser_generic::parseFile(file_path, UTF_8);
 }
 
-Object *parser_generic::parseISO_8859_15(const std::string &file_path){
-	return parser_generic::parse(file_path, ISO_8859_15);
+shared_ptr<Object> parser_generic::parseISO_8859_15File(const std::string &file_path){
+	return parser_generic::parseFile(file_path, ISO_8859_15);
 }
 
-Object *parser_generic::parse(const std::string &file_path, Encoding file_encoding){
+shared_ptr<Object> parser_generic::parseFile(const std::string &file_path, Encoding file_encoding){
 	using namespace std;
-		
-	LOG(LogLevel::Debug) << "parsing file " << file_path;	
+
+	LOG(LogLevel::Debug) << "parsing file " << file_path;
 
 	//open the file as a wide character stream
 	basic_ifstream<wchar_t> input{file_path};
@@ -37,7 +37,7 @@ Object *parser_generic::parse(const std::string &file_path, Encoding file_encodi
 
 	//create a new local based on the old one, but using the codecvt facet to decode the file encoding to the system dependant WCHAR encoding
 	locale loc{input.getloc(), new ConversionFacet<wchar_t,char>{file_encoding, WCHAR}};
-	
+
 	/*
 	input will now interpret the file as encoded by the specified encoding and transform the output into wide characters using the system dependentencoding
 	this will be UCS (4 byte codepoints) in most linux distro's and UTF-16 LE on windows
@@ -54,10 +54,40 @@ Object *parser_generic::parse(const std::string &file_path, Encoding file_encodi
 	return parser_generic::parse(input);	
 }
 
-// forward declaration of the parse function to keep things clean
-template<typename Iterator> Object *do_parse(Iterator begin, Iterator end);
+shared_ptr<Object> parser_generic::parseUTF_8(std::istream& input){
+	return parser_generic::parseStream(input, UTF_8);
+}
 
-Object *parser_generic::parse(std::basic_istream<wchar_t> &input){
+shared_ptr<Object> parser_generic::parseISO_8859_15(std::istream& input){
+	return parser_generic::parseStream(input, ISO_8859_15);
+}
+
+shared_ptr<Object> parser_generic::parseStream(std::istream& input, Encoding stream_encoding){
+	using namespace std;
+
+	LOG(LogLevel::Debug) << "parsing stream";
+
+	//unset skipping of whitespace
+	input.unsetf(std::ios::skipws);
+
+	//create a new local based on the old one, but using the codecvt facet to decode the file encoding to the system dependant WCHAR encoding
+	locale loc{input.getloc(), new ConversionFacet<wchar_t,char>{stream_encoding, WCHAR}};
+
+	/*
+	input will now interpret the file as encoded by the specified encoding and transform the output into wide characters using the system dependentencoding
+	this will be UCS (4 byte codepoints) in most linux distro's and UTF-16 LE on windows
+	because the system encoding is not specifically named, the parser is portable if the ConversionFacet codecvt facet is implemented on all target systems
+	*/
+	input.imbue(loc);
+
+	//delegate to parse, which won't need to care about the encoding anymore
+	return parser_generic::parse(input);
+}
+
+// forward declaration of the parse function to keep things clean
+template<typename Iterator> shared_ptr<Object> do_parse(Iterator begin, Iterator end);
+
+shared_ptr<Object> parser_generic::parse(std::basic_istream<wchar_t> &input){
 	/*
 	use boost's istream_iterator to directly couple the istream to the parser
 	this makes sure we can parse the entire file without preparsing it into objects and buffering each one (bufferNextObject will no longer be needed)
@@ -109,8 +139,8 @@ public:
 */
 class ParserState{
 private:
-        Object *root_;
-        std::stack<Object *> stack_;
+        shared_ptr<Object> root_;
+        std::stack<shared_ptr<Object>> stack_;
         std::wstring identifier_;
 
         Object &current_scope(){
@@ -135,7 +165,7 @@ private:
         };
 public:
 
-        ParserState() : root_(new Object{"topLevel"}), stack_{}{
+        ParserState() : root_(make_shared<Object>("topLevel")), stack_{}{
                 stack_.push(root_);
         };
 
@@ -148,7 +178,7 @@ public:
         };
 
         void add_to_map(const std::wstring &value){
-		Object* object = new Object{read_and_discard_identifier()};
+		shared_ptr<Object>  object = make_shared<Object>(read_and_discard_identifier());
 		object->setValue(encode(value));
                 current_scope().setValue(object);
         };
@@ -157,13 +187,13 @@ public:
         };
 
         void enter_scope(wchar_t){
-                Object *object;
+                shared_ptr<Object> object;
                 if(identifier_.empty()){
-                        object = new Object{"listItem"}; //TODO: maybe add an identifier here
+                        object = make_shared<Object>("listItem"); //TODO: maybe add an identifier here
                         current_scope().setObjList(true);
 			current_scope().addObject(object);
                 }else{
-                        object = new Object{read_and_discard_identifier()};
+                        object = make_shared<Object>(read_and_discard_identifier());
                         current_scope().setValue(object);
                 }
                 stack_.push(object);
@@ -179,14 +209,14 @@ public:
         void comment(const std::wstring &str){
         };
 
-        Object *consume_result(){
-                Object *result = nullptr;
+        shared_ptr<Object> consume_result(){
+                shared_ptr<Object> result;
                 std::swap(result, root_);
                 return result;
         };
 
         ~ParserState(){
-                delete root_;
+                root_;
         };
 };
 
@@ -274,7 +304,7 @@ public:
         };
 };
 
-template<typename Iterator> Object *do_parse(Iterator begin, Iterator end){
+template<typename Iterator> shared_ptr<Object> do_parse(Iterator begin, Iterator end){
 	using boost::spirit::qi::parse;
 	using namespace std;
 	ParserState state;

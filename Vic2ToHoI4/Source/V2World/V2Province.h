@@ -24,32 +24,39 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.*/
 #ifndef V2PROVINCE_H_
 #define V2PROVINCE_H_
 
+
+
 #include "../Configuration.h"
 #include "V2Rgo.h"
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
 using namespace std;
 
+
+
 class Object;
 class V2Country;
 class V2Pop;
 
+
+
 class V2Province
 {
 	public:
-		V2Province(Object* obj);
+		explicit V2Province(shared_ptr<Object> obj);
 		void setCores(const map<string, V2Country*>& countries);
 
 		int getTotalPopulation() const;
-		int getPopulation(string type = "") const;
-		int getLiteracyWeightedPopulation(string type = "") const;
+		int getPopulation(optional<string> type = {}) const;
+		int getLiteracyWeightedPopulation(optional<string> type = {}) const;
 		double getPercentageWithCultures(const set<string>& cultures) const;
 
 		void setOwner(const V2Country* _owner) { owner = _owner; }
-		void addCoreString(string coreString) { coreStrings.insert(coreString); }
-		void removeCoreString(string coreString) { coreStrings.erase(coreString); }
+		void addCoreString(const string& coreString) { coreStrings.insert(coreString); }
+		void removeCoreString(const string& coreString) { coreStrings.erase(coreString); }
 		void removeCore(V2Country* core) { cores.erase(core); }
 
 		int getNumber() const { return number; }
@@ -59,17 +66,19 @@ class V2Province
 		int getRailLevel() const { return railLevel; }
 		int getFortLevel() const { return fortLevel; }
 		int getNavalBaseLevel() const { return navalBaseLevel; }
-		const V2Rgo& getRgo() { return rgo; }
+		vector<const V2Pop*> getPops() const { return pops; }
 
 	private:
-		void readOwner(Object* obj);
-		void readCores(Object* obj);
-		void readForts(Object* obj);
-		void readNavalBases(Object* obj);
-		void readRails(Object* obj);
-		void readRgo(Object* obj);
-		void readPops(Object* obj);
-		bool isPopObject(Object* obj);
+		V2Province(const V2Province&) = delete;
+		V2Province& operator=(const V2Province&) = delete;
+
+		void readCores(shared_ptr<Object> obj);
+		void readForts(shared_ptr<Object> obj);
+		void readNavalBases(shared_ptr<Object> obj);
+		void readRails(shared_ptr<Object> obj);
+		void readRgo(shared_ptr<Object> obj);
+		void readPops(shared_ptr<Object> obj);
+		bool isPopObject(shared_ptr<Object> obj);
 		int calculateLiteracyWeightedPop(const V2Pop* thePop) const;
 
 		int number;
@@ -80,7 +89,7 @@ class V2Province
 		set<string> coreStrings;
 		set<V2Country*> cores;
 
-		vector<V2Pop*> pops;
+		vector<const V2Pop*> pops;
 		V2Rgo rgo;
 
 		int fortLevel;

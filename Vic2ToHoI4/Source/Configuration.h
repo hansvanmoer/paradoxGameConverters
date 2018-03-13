@@ -1,4 +1,4 @@
-/*Copyright (c) 2016 The Paradox Game Converters Project
+/*Copyright (c) 2017 The Paradox Game Converters Project
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -25,10 +25,20 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.*/
 #define CONFIGURATION_H_
 
 
+
 #include <string>
 #include <vector>
 #include "HOI4World/HOI4Version.h"
 using namespace std;
+
+
+
+enum class ideologyOptions
+{
+	keep_major,
+	keep_all,
+	keep_default
+};
 
 
 
@@ -62,7 +72,7 @@ class Configuration // Singleton
 			getInstance()->forceMultiplier = mult;
 		}
 
-		static void setOutputName(string name)
+		static void setOutputName(const string& name)
 		{
 			getInstance()->outputName = name;
 		}
@@ -92,11 +102,6 @@ class Configuration // Singleton
 			return getInstance()->icFactor;
 		}
 
-		static bool getICStats()
-		{
-			return getInstance()->ICStats;
-		}
-
 		static int getNextLeaderID()
 		{
 			return getInstance()->leaderID++;
@@ -108,19 +113,29 @@ class Configuration // Singleton
 			getInstance()->leaderID = 1000 * getInstance()->leaderIDCountryIdx;	
 		}
 
-		static HOI4Version getHOI4Version()
+		static HOI4Version& getHOI4Version()
 		{
 			return getInstance()->version;
 		}
 
-		static bool getDropMinorIdeologies()
+		static ideologyOptions getIdeologiesOptions()
 		{
-			return getInstance()->dropMinorIdeologies;
+			return getInstance()->ideologiesOptions;
+		}
+
+		static bool getDebug()
+		{
+			return getInstance()->debug;
+		}
+
+		static bool getRemoveCores()
+		{
+			return getInstance()->removeCores;
 		}
 
 		static Configuration* getInstance()
 		{
-			if (instance == NULL)
+			if (instance == nullptr)
 			{
 				instance = new Configuration();
 			}
@@ -129,6 +144,8 @@ class Configuration // Singleton
 
 	private:
 		static Configuration* instance;
+		Configuration(const Configuration&) = delete;
+		Configuration& operator=(const Configuration&) = delete;
 
 		HOI4Version getAutomaticHoI4Version();
 
@@ -142,17 +159,18 @@ class Configuration // Singleton
 		double			manpowerFactor;
 		double industrialShapeFactor;
 		double			icFactor;
-		bool ICStats;
 
-		// If true, only major idologies are kept. All minor ideologies are
-		// converted to neutrality. "Major ideologies" are defined by
-		// HoI4World::identifyMajorIdeologies.
-		bool dropMinorIdeologies;
+		ideologyOptions ideologiesOptions;
+
+		bool debug;
+		bool removeCores;
 
 		unsigned int	leaderID;
 		unsigned int	leaderIDCountryIdx;
 
 		HOI4Version version;
 };
+
+
 
 #endif // CONFIGURATION_H_

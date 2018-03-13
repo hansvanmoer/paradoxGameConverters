@@ -1,4 +1,4 @@
-/*Copyright (c) 2016 The Paradox Game Converters Project
+/*Copyright (c) 2018 The Paradox Game Converters Project
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -22,17 +22,15 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.*/
 
 
 #include "V2Party.h"
-#include "Log.h"
 
 
 
-V2Party::V2Party(Object *party_obj)
-{
-	name = party_obj->getLeaf("name");
-	ideology = party_obj->getLeaf("ideology");
-	economic_policy = party_obj->getLeaf("economic_policy");
-	trade_policy = party_obj->getLeaf("trade_policy");
-	religious_policy = party_obj->getLeaf("religious_policy");
-	citizenship_policy = party_obj->getLeaf("citizenship_policy");
-	war_policy = party_obj->getLeaf("war_policy");
-}
+V2Party::V2Party(shared_ptr<Object> party_obj):
+	name(party_obj->safeGetString("name")),
+	ideology(party_obj->safeGetString("ideology")),
+	economic_policy(party_obj->safeGetString("economic_policy")),
+	trade_policy(party_obj->safeGetString("trade_policy")),
+	religious_policy(party_obj->safeGetString("religious_policy")),
+	citizenship_policy(party_obj->safeGetString("citizenship_policy")),
+	warPolicy(party_obj->safeGetString("war_policy"))
+{}

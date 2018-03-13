@@ -1,4 +1,4 @@
-/*Copyright (c) 2017 The Paradox Game Converters Project
+/*Copyright (c) 2018 The Paradox Game Converters Project
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -22,37 +22,13 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.*/
 
 
 #include "Vic2Agreement.h"
-#include "Log.h"
 
 
 
-V2Agreement::V2Agreement(Object *obj)
+V2Agreement::V2Agreement(shared_ptr<Object> obj):
+	type(obj->getKey()),
+	country1(obj->safeGetString("first")),
+	country2(obj->safeGetString("second")),
+	startDate(obj->safeGetString("start_date"))
 {
-	type = obj->getKey();
-
-	vector<Object*> objFirst = obj->getValue("first");
-	if (objFirst.size() > 0)
-	{
-		country1 = objFirst[0]->getLeaf();
-	}
-	else
-	{
-		LOG(LogLevel::Warning) << "Diplomatic agreement (" << type << ") has no first party";
-	}
-
-	vector<Object*> objSecond = obj->getValue("second");
-	if (objSecond.size() > 0)
-	{
-		country2 = objSecond[0]->getLeaf();
-	}
-	else
-	{
-		LOG(LogLevel::Warning) << "Diplomatic agreement (" << type << ") has no second party";
-	}
-
-	vector<Object*> objDate = obj->getValue("start_date");
-	if (objDate.size() > 0)
-	{
-		start_date = date(objDate[0]->getLeaf());
-	}
 }

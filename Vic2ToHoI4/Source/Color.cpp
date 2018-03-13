@@ -1,4 +1,4 @@
-/*Copyright (c) 2016 The Paradox Game Converters Project
+/*Copyright (c) 2017 The Paradox Game Converters Project
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -22,12 +22,10 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.*/
 
 
 #include "Color.h"
-
 #include <chrono>
 #include <random>
-#include <boost/lexical_cast.hpp>
-
 #include "Object.h"
+using namespace ConverterColor;
 
 
 
@@ -35,31 +33,34 @@ Color::Color()
 : initialized(false), c({ 0, 0, 0 })
 {}
 
-Color::Color(const int r, const int g, const int b)
-: initialized(true), c({ r, g, b })
+
+Color::Color(const red r, const green g, const blue b)
+: initialized(true), c({ r.Red, g.Green, b.Blue })
 {}
 
-Color::Color(Object* colorObject)
+
+Color::Color(shared_ptr<Object> colorObject)
 : initialized(false), c({ 0, 0, 0 })
 {
-	auto colorTokens = colorObject->getTokens();	// the colors held by the object
-	initialized = (colorTokens.size() >= 3);
+	initialized = (colorObject->numTokens() >= 3);
 	for (size_t i = 0; i < 3; ++i)
 	{
-		if (!colorTokens[i].empty())
+		auto possibleToken = colorObject->getToken(i);
+		if (possibleToken)
 		{
-			c[i] = boost::lexical_cast<int>(colorTokens[i]);
+			c[i] = stoi(*possibleToken);
 		}
 	}
 }
+
 
 void Color::RandomlyFlunctuate(const int stdDev)
 {
 	// All three color components will go up or down by the some amount (according to stdDev), 
 	// and then each is tweaked a bit more (with a much smaller standard deviation).
-	static std::mt19937 generator(static_cast<unsigned int>(std::chrono::system_clock::now().time_since_epoch().count()));
-	const double allChange = std::normal_distribution<double>(0.0, stdDev)(generator);	// the amount the colors all change by
-	std::normal_distribution<double> distribution(0.0, stdDev / 4.0);
+	static mt19937 generator(static_cast<unsigned int>(chrono::system_clock::now().time_since_epoch().count()));
+	const double allChange = normal_distribution<double>(0.0, stdDev)(generator);	// the amount the colors all change by
+	normal_distribution<double> distribution(0.0, stdDev / 4.0);
 	for (auto& component : c)	// the component under consideration
 	{
 		component += static_cast<int>(allChange + distribution(generator) + 0.5);
@@ -74,17 +75,19 @@ void Color::RandomlyFlunctuate(const int stdDev)
 	}
 }
 
-std::ostream& operator<<(std::ostream& out, const Color& color)
+
+ostream& ConverterColor::operator<<(ostream& out, const Color& color)
 {
 	out << color.c[0] << ' ' << color.c[1] << ' ' << color.c[2];
 	return out;
 }
 
-void Color::GetRGB(int& r, int& g, int& b) const
+
+void Color::GetRGB(red& r, green& g, blue& b) const
 {
-	r = c[0];
-	g = c[1];
-	b = c[2];
+	r.Red = c[0];
+	g.Green = c[1];
+	b.Blue = c[2];
 }
 
 
