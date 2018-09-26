@@ -13,6 +13,7 @@ add_compile_options("-g")
 
 include(../cmake/CompilerFeatureCheck.cmake)
 
+compiler_feature_check_regex()
 compiler_feature_check_optional()
 
 include_directories("../common_items")
