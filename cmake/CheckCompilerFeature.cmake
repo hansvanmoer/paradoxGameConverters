@@ -9,7 +9,7 @@ macro(check_compiler_feature featureName message code)
 check_cxx_source_compiles("${code}" ${featureName})
 
 if(NOT ${featureName})
-  message(FATAL_ERROR "missing compiler feature:\n\t${message} :\nPlease update your compiler (currently '${CMAKE_CXX_COMPILER}') or specify another toolchain by running the cmake command with -DCMAKE_TOOLCHAIN_FILE=/path/to/toolchain/file\nExample toolchain files can be found in the cmake/examples folder in the paradoxGameConverters source\nNote that this test is only performed once and the result is cached: delete the CMakeCache.txt before running cmake again.\n")
+  message(FATAL_ERROR "\nMissing compiler or standard library feature:\n\t${message}\nPlease update your compiler (currently '${CMAKE_CXX_COMPILER}') or specify another toolchain by running the cmake command with -DCMAKE_TOOLCHAIN_FILE=/path/to/toolchain/file\nExample toolchain files can be found in the cmake/examples folder in the paradoxGameConverters source\nNote that this test is only performed once and the result is cached: delete the CMakeCache.txt before running cmake again.\n")
 endif()
 
 endmacro()
