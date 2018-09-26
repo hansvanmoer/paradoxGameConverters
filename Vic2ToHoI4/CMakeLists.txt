@@ -11,10 +11,10 @@ set(LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/Release-Linux)
 add_compile_options("-std=c++17")
 add_compile_options("-g")
 
-include(../cmake/CompilerFeatureCheck.cmake)
+include(../cmake/CheckCompilerFeature.cmake)
 
-compiler_feature_check_regex()
-compiler_feature_check_optional()
+check_compiler_feature_std_regex()
+check_compiler_feature_std_optional()
 
 include_directories("../common_items")
 include_directories("${PROJECT_SOURCE_DIR}")
